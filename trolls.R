@@ -93,6 +93,95 @@ gplot(trolls,vertex.col=as.color(trolls%v%"accountcategory"),displayisolates=FAL
 legend("bottom",legend=unique(trolls%v%"accountcategory"),pch=19,col=unique(as.color(trolls%v%"accountcategory")),title="Account Type",horiz=TRUE)
 dev.off()
 
+stop("The next section eats memory for breakfast.")
+###Dynamic network and total network
+#Added 9/8/2018
+#First temporal order
+f1<-f1[order(f1$publish_date),]
+f1$tdiff<-diff(c(f1$publish_date[1],f1$publish_date))
+f1$ctime<-cumsum(as.numeric(f1$tdiff))
+
+#Next, repeat pull all mentions. Ignore formatting issues.
+f100<-str_match_all(f1[,3],"(?<=@)[^\\s:]+")
+gc()
+
+#How big is this?
+object.size(f100)/1e6
+
+#Generate total edge list (no temporal offset or adjustment for non-simultaneity yet)
+#Can be multithreaded to improve speed. Otherwise, this is slower than binary lookup [O(log_2(n))]
+# on a i7 chip on account of nesting of vectorized functions. The resulting f100 object has complexity in excess
+# of 2e6*f(x) X ncol(f1),  where f(x) is the average the number of mentions per tweet.
+#We want to retain the null events (tweets without mentions) for completeness in the relational event framework.
+#As the resulting object will be enormous in memory, it's not feasible to retain in situ at the moment.
+# Solution: split task into two objects, one with mentions and one without and recombine later.
+
+#Total expected single dimension length:
+tdl<-sum(sapply(f100,function(x) ifelse(length(x)==0,1,length(x))))
+
+#Total expected complexity
+tdl*(nrow(f1)+1)
+
+#index the null events
+f100.nulls<-which(sapply(f100,length)==0)
+
+#index the mention events
+f100.ments<-which(sapply(f100,length)>0)
+
+#subset the mentions
+f100<-f100[f100.ments]
+
+#subset expected single dimension length:
+tdl2<-sum(sapply(f100,function(x) ifelse(length(x)==0,1,length(x))))
+
+#subset expected complexity
+tdl2*(nrow(f1)+1)
+
+#Fraction of tweets with ANY mentions (~15%):
+length(f100)/nrow(f1)
+
+for(i in 1:length(f100)){
+  f100[[i]]<-as.data.frame(do.call("rbind",apply(f100[[i]],1,function(x) as.data.frame(list(rec=as.character(x),f1[f100.ments[i],])))))
+  f100[[i]]$rec<-as.character(f100[[i]]$rec)
+}
+
+#Several options for recombining the final dataset
+# Here, I'm writing out the file file and reading it
+# back in but if you have a lot of throughout, use do.call()
+# or otherwise, rbind on a loop
+f100.el<-do.call("rbind",f100)
+
+#Vectorized write-out version:
+#f100.el<-f100[[1]]
+#lapply(f100,write.table, file="f100.el.csv",row.names=FALSE,sep=",",col.names=FALSE,append=TRUE)
+
+#Loop version for those that really need to know about every iteration
+#write.table(f100.el,file="f100.el.csv",row.names=FALSE,sep=",")
+#for(i in 2:length(f100)){
+#   write.table(f100[[i]],file="f100.el.csv",row.names=FALSE,sep=",",col.names=FALSE,append=TRUE)
+#   if(i%%100==0) print(paste("iteration",i))
+#}
+
+#Now dump the originals and read back in the new edgelist
+rm(f1,f100)
+gc()
+
+#fns<-colnames(f100.el)
+#f100.el<-read.csv("f100.el.csv",head=FALSE,stringsAsFactors=FALSE)
+#colnames(f100.el)<-fns
+
+#Construct edgelist from author, and rec (could optionally paste in timestamps and re-order if relational event framework is desired)
+RT.el<-as.data.frame(list(sender=as.factor(f100.el$author),receiver=as.factor(f100.el$rec),val=1))
+
+#Reduce dimensionality to union rule:
+dupes<-which(duplicated(RT.el))
+RT.el<-RT.el[-dupes,]
+
+#Total mention volume per receiver
+b1.tab<-table(f100.el$rec)
+
+barplot(sort(b1.tab,decreasing=TRUE)[1:100],col=ifelse(names(sort(b1.tab,decreasing=TRUE)[1:100])%in%f100.el$author,"green","gray"),las=2,ylab="freq")
+
 stop("Code below is outdated")
 ###First attempt was to strict but retaining code here for transparency.
 #Conservative intersection rule network
