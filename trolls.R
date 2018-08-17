@@ -83,7 +83,8 @@ minpostdate<-by(f1$publish_date,f1[,2],function(x) as.character(min(x)))
 set.vertex.attribute(trolls,"maxpostdate",as.character(maxpostdate[match(c(trolls%v%"vertex.names"),names(maxpostdate))]))
 set.vertex.attribute(trolls,"minpostdate",as.character(minpostdate[match(c(trolls%v%"vertex.names"),names(minpostdate))]))
 
-save(trolls,file="trolls.Rdata")
+#Save output file
+#save(trolls,file="trolls.Rdata")
 
 set.seed(20818)
 
@@ -166,21 +167,8 @@ f100.el<-do.call("rbind",f100)
 rm(f1,f100)
 gc()
 
-#fns<-colnames(f100.el)
-#f100.el<-read.csv("f100.el.csv",head=FALSE,stringsAsFactors=FALSE)
-#colnames(f100.el)<-fns
-
 #Construct edgelist from author, and rec (could optionally paste in timestamps and re-order if relational event framework is desired)
 RT.el<-as.data.frame(list(sender=as.factor(f100.el$author),receiver=as.factor(f100.el$rec),val=1))
-
-#Reduce dimensionality to union rule:
-dupes<-which(duplicated(RT.el))
-RT.el<-RT.el[-dupes,]
-
-#Total mention volume per receiver
-b1.tab<-table(f100.el$rec)
-
-barplot(sort(b1.tab,decreasing=TRUE)[1:100],col=ifelse(names(sort(b1.tab,decreasing=TRUE)[1:100])%in%f100.el$author,"green","gray"),las=2,ylab="freq")
 
 stop("Code below is outdated")
 ###First attempt was to strict but retaining code here for transparency.
@@ -190,7 +178,6 @@ names(f1.neighbs.tn)<-(names(f1.neighbs.tn))
 f1.neighbs.tn<-f1.neighbs.tn[which(lapply(f1.neighbs.tn,length)>0)]
 
 f1.neighbs.tn<-lapply(f1.neighbs.tn,function(x) intersect(x,trollnet))
-
 trollnet.mat<-matrix(0,nrow=length(f1.neighbs.tn),ncol=length(f1.neighbs.tn),dimnames=list(trollnet,trollnet))
 
 for(i in 1:length(f1.neighbs.tn)){
